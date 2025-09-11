@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/images/favicon.ico">
+    <title>CodeBeamer Report Uploader</title>
+    <link rel="stylesheet" type="text/css" href="css/style.css" />
+    <link rel="stylesheet" type="text/css" href="css/darkmode.css" />
+  
+  </head>
+  
+  <body>
+    <header class="header">
+        <div class="logo"><a href="https://www.dwdcc.com/"><img src="images/doowon_logo.png" alt="Logo" /></a></div>
+        <div class="title-container"><h1>CodeBeamer Report Uploader</h1><p>Upload any report to multiple tracker items</p></div>
+        <div class="menu-container">
+            <span class="menu-item"><img src="images/user.svg" alt="User" /><%= username %></span>
+        </div>                  
+    </header>
+
+    <div class="main-container">
+        <div class="upload-section">
+            <h2>📄 리포트 파일 선택</h2>
+            <div class="file-upload-area" id="fileUploadArea">
+                <div class="upload-content">
+                    <div class="upload-icon">📁</div>
+                    <p class="upload-text">첨부하고자 하는 리포트 파일을 여기에 드래그 앤 드롭 또는 파일 선택 버튼을 클릭해 주세요.</p>
+                    <p class="upload-subtext">지원 파일 형식 : PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, HTML, TXT</p>
+                     <button class="browse-btn" id="browseBtn">파일 선택</button>
+                    <input type="file" id="fileInput" multiple style="display: none;">
+        </div>
+    </div>
+
+            <div class="selected-files" id="selectedFiles" style="display: none;">
+                <div class="files-header">
+                    <h3>선택한 파일</h3>
+                    <button class="clear-all-files-btn" onclick="clearAllFiles()">모든 파일 제거</button>
+                    </div>
+                <div class="files-list" id="filesList">
+                    <!-- Files will be displayed here -->
+                    </div>
+            </div>
+            
+        <div class="target-section">
+            <h2>🎯 대상 트래커 아이템</h2>
+                                <div class="selector-container">
+                <select id="projectSelector" onchange="loadTrackers()">
+                                        <option value="">프로젝트 선택</option>
+                                    </select>
+                <select id="trackerSelector" onchange="loadItems()" disabled>
+                                        <option value="">트래커 선택</option>
+                                    </select>
+                <button id="viewTrackerBtn" onclick="viewTracker()" disabled class="view-tracker-btn">
+                    🔗 트래커 보기
+                        </button>
+            </div>
+            
+            <div class="items-selection" id="itemsSelection" style="display: none;">
+                <div class="items-header">
+                    <h3>리포트를 첨부할 아이템 선택</h3>
+                    <div class="items-controls">
+                        <button class="select-all-btn" onclick="selectAllItems()">전체 선택</button>
+                        <button class="clear-selection-btn" onclick="clearSelection()">선택 초기화</button>
+            </div>
+        </div>
+                <div class="items-list" id="itemsList">
+                    <!-- Items will be populated here -->
+                        </div>
+                <div class="selected-count" id="selectedCount">0개의 아이템이 선택됨</div>
+                    </div>
+                </div>
+                
+        <div class="action-section">
+            <button class="upload-btn" id="uploadBtn" onclick="uploadReport()" disabled>
+                📎 선택한 아이템에 리포트 첨부
+            </button>
+                </div>
+            
+        <div id="status" class="status"></div>
+        <div id="progress" class="progress-bar" style="display: none;">
+                <div class="progress-fill"></div>
+                <span class="progress-text">0%</span>
+            </div>
+
+        <div id="results" class="results" style="display: none;">
+            <h4>파일 전송 결과</h4>
+            <div id="resultsList"></div>
+            </div>
+    </div>
+
+<script>
+    let selectedFiles = [];
+    let selectedItems = new Set();
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initFileUpload();
+        loadProjects();
+    });
+
+    function initFileUpload() {
+        const uploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const browseBtn = document.getElementById('browseBtn');
+
+        // Click to browse - only trigger if not clicking on the browse button
+        uploadArea.addEventListener('click', (event) => {
+            // Don't trigger if clicking on the browse button
+            if (event.target.classList.contains('browse-btn')) {
+            return;
+        }
+            fileInput.click();
+        });
+
+        // Browse button click handler
+        browseBtn.addEventListener('click', (event) => {
+            event.stopPropagation(); // Prevent triggering upload area click
+                fileInput.click();
+        });
+
+        // Drag and drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => {
+                uploadArea.classList.add('drag-over');
+            }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => {
+                uploadArea.classList.remove('drag-over');
+            }, false);
+        });
+ 
+        uploadArea.addEventListener('drop', (event) => {
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect({ target: { files: files } });
+            }
+        }, false);
+
+        // Handle file input change event
+        fileInput.addEventListener('change', handleFileSelect);
+    }
+    
+    function preventDefaults(event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    function handleFileSelect(event) {
+        const files = Array.from(event.target.files);
+        if (files.length === 0) return;
+
+        // Add new files to existing selection
+        files.forEach(file => {
+            // Check if file already exists (by name and size)
+            const exists = selectedFiles.some(f => f.name === file.name && f.size === file.size);
+            if (!exists) {
+                selectedFiles.push(file);
+            }
+        });
+
+        displaySelectedFiles();
+        updateUploadButton();
+        
+        // Clear the input so the same files can be selected again if needed
+        event.target.value = '';
+    }
+
+    function displaySelectedFiles() {
+        const selectedFilesDiv = document.getElementById('selectedFiles');
+        const filesList = document.getElementById('filesList');
+
+        if (selectedFiles.length === 0) {
+            selectedFilesDiv.style.display = 'none';
+            return;
+        }
+
+        filesList.innerHTML = '';
+        selectedFiles.forEach((file, index) => {
+            const fileDiv = document.createElement('div');
+            fileDiv.className = 'file-item';
+            fileDiv.innerHTML = `
+                <div class="file-info">
+                    <span class="file-icon">📄</span>
+                    <div class="file-details">
+                        <span class="file-name">${file.name}</span>
+                        <span class="file-size">${formatFileSize(file.size)}</span>
+                    </div>
+                    <button class="remove-file-btn" onclick="removeFile(${index})">×</button>
+                </div>
+            `;
+            filesList.appendChild(fileDiv);
+        });
+
+        selectedFilesDiv.style.display = 'block';
+    }
+
+    function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        displaySelectedFiles();
+        updateUploadButton();
+    }
+
+    function clearAllFiles() {
+        selectedFiles = [];
+        displaySelectedFiles();
+        updateUploadButton();
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    async function loadProjects() {
+        try {
+            const projects = await fetchProjects();
+            const projectSelector = document.getElementById('projectSelector');
+            
+            projectSelector.innerHTML = '<option value="">프로젝트 선택</option>';
+            projects.forEach(project => {
+                const option = document.createElement('option');
+                option.value = project.id;
+                option.textContent = project.name;
+                projectSelector.appendChild(option);
+                });
+            } catch (error) {
+            console.error('Error loading projects:', error);
+            showStatus('Failed to load projects', false);
+        }
+    }
+
+    async function fetchProjects() {
+        // Static project data for now
+        return [
+            {
+                id: 11,
+                name: "VectorCAST"
+            }
+        ];
+    }
+
+    async function loadTrackers() {
+        const projectSelector = document.getElementById('projectSelector');
+        const trackerSelector = document.getElementById('trackerSelector');
+        const viewTrackerBtn = document.getElementById('viewTrackerBtn');
+        const itemsSelection = document.getElementById('itemsSelection');
+        
+        trackerSelector.innerHTML = '<option value="">트래커 선택</option>';
+        trackerSelector.disabled = true;
+        viewTrackerBtn.disabled = true;
+        itemsSelection.style.display = 'none';
+        selectedItems.clear();
+        updateSelectedCount();
+        
+        if (!projectSelector.value) return;
+        
+        try {
+            const trackers = await fetchTrackers(projectSelector.value);
+            
+            trackers.forEach(tracker => {
+                const option = document.createElement('option');
+                option.value = tracker.id;
+                option.textContent = tracker.name;
+                trackerSelector.appendChild(option);
+            });
+            
+            trackerSelector.disabled = false;
+        } catch (error) {
+            console.error('Error loading trackers:', error);
+            showStatus('Failed to load trackers', false);
+        }
+    }
+
+    async function fetchTrackers(projectId) {
+        // Static tracker data for now
+        if (projectId === "11") {
+            return [
+                {
+                    id: 13136,
+                    name: "Test Results"
+                }
+            ];
+        }
+        return [];
+    }
+
+    async function loadItems() {
+        const trackerSelector = document.getElementById('trackerSelector');
+        const viewTrackerBtn = document.getElementById('viewTrackerBtn');
+        const itemsSelection = document.getElementById('itemsSelection');
+        const itemsList = document.getElementById('itemsList');
+
+        itemsSelection.style.display = 'none';
+        selectedItems.clear();
+        updateSelectedCount();
+        
+        if (!trackerSelector.value) {
+            viewTrackerBtn.disabled = true;
+            return;
+        }
+
+        // Enable view tracker button when tracker is selected
+        viewTrackerBtn.disabled = false;
+
+        try {
+            const items = await fetchItems(trackerSelector.value);
+            
+            itemsList.innerHTML = '';
+            items.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item-checkbox';
+                itemDiv.innerHTML = `
+                    <input type="checkbox" id="item-${item.id}" value="${item.id}" onchange="toggleItem(${item.id})">
+                    <label for="item-${item.id}">
+                        <span class="item-id">${item.id}</span>
+                        <span class="item-name">${item.name}</span>
+                    </label>
+                `;
+                itemsList.appendChild(itemDiv);
+            });
+            
+            itemsSelection.style.display = 'block';
+        } catch (error) {
+            console.error('Error loading items:', error);
+            showStatus('Failed to load items', false);
+        }
+    }
+
+    async function fetchItems(trackerId) {
+        try {
+            const response = await fetch(`/api/codebeamer/trackers/${trackerId}/items`, {
+                method: 'GET',
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch items: ${response.status}`);
+            }
+            
+            const responseData = await response.json();
+            
+            // Handle different response structures
+            let items;
+            if (Array.isArray(responseData)) {
+                items = responseData;
+            } else if (responseData.itemRefs && Array.isArray(responseData.itemRefs)) {
+                items = responseData.itemRefs;
+            } else if (responseData.items && Array.isArray(responseData.items)) {
+                items = responseData.items;
+            } else if (responseData.data && Array.isArray(responseData.data)) {
+                items = responseData.data;
+            } else {
+                throw new Error('Invalid response format');
+            }
+            
+            return items;
+        } catch (error) {
+            console.error('Error fetching items:', error);
+            throw error;
+        }
+    }
+
+    function toggleItem(itemId) {
+        const checkbox = document.getElementById(`item-${itemId}`);
+        if (checkbox.checked) {
+            selectedItems.add(itemId);
+        } else {
+            selectedItems.delete(itemId);
+        }
+        updateSelectedCount();
+        updateUploadButton();
+    }
+
+    function selectAllItems() {
+        const checkboxes = document.querySelectorAll('#itemsList input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = true;
+            selectedItems.add(parseInt(checkbox.value));
+        });
+        updateSelectedCount();
+        updateUploadButton();
+    }
+
+    function clearSelection() {
+        const checkboxes = document.querySelectorAll('#itemsList input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        selectedItems.clear();
+        updateSelectedCount();
+        updateUploadButton();
+    }
+
+    function updateSelectedCount() {
+        const count = selectedItems.size;
+        document.getElementById('selectedCount').textContent = `${count}개의 아이템이 선택됨`;
+    }
+
+    function updateUploadButton() {
+        const uploadBtn = document.getElementById('uploadBtn');
+        uploadBtn.disabled = selectedFiles.length === 0 || selectedItems.size === 0;
+    }
+
+    async function uploadReport() {
+        if (selectedFiles.length === 0 || selectedItems.size === 0) {
+            showStatus('파일과 최소 하나의 아이템을 선택해주세요.', false);
+            return;
+        }
+        
+        const progressBar = document.getElementById('progress');
+        const progressFill = progressBar.querySelector('.progress-fill');
+        const progressText = progressBar.querySelector('.progress-text');
+        const resultsDiv = document.getElementById('results');
+        const resultsList = document.getElementById('resultsList');
+
+        progressBar.style.display = 'block';
+        resultsDiv.style.display = 'none';
+
+        try {
+            showStatus('파일 전송 중...', true);
+            
+            const totalFiles = selectedFiles.length;
+            const totalItems = selectedItems.size;
+            const totalOperations = totalFiles * totalItems;
+            let completedOperations = 0;
+            
+            let allResults = [];
+            
+            // Process each file
+            for (let fileIndex = 0; fileIndex < selectedFiles.length; fileIndex++) {
+                const file = selectedFiles[fileIndex];
+                showStatus(`파일 파일 전송 중: ${file.name} (${fileIndex + 1}/${totalFiles})`, true);
+                
+                const fileContent = await readFileAsBase64(file);
+                const uploadData = {
+                    fileName: file.name,
+                    fileContent: fileContent,
+                    itemIds: Array.from(selectedItems)
+                };
+
+                const response = await fetch('/api/codebeamer/upload-report', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(uploadData),
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Upload failed');
+                }
+
+                const result = await response.json();
+                allResults.push({
+                    fileName: file.name,
+                    result: result
+                });
+                
+                completedOperations += totalItems;
+                const progress = Math.round((completedOperations / totalOperations) * 100);
+                progressFill.style.width = progress + '%';
+                progressText.textContent = progress + '%';
+            }
+            
+            // Calculate overall results
+            const totalSuccess = allResults.reduce((sum, r) => sum + r.result.successCount, 0);
+            const totalFailure = allResults.reduce((sum, r) => sum + r.result.failureCount, 0);
+            
+            showStatus(`파일 전송 완료: ${totalSuccess}개 성공, ${totalFailure}개 실패`, totalFailure === 0);
+
+            // Display results
+            resultsList.innerHTML = allResults.map(fileResult => {
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'file-result';
+                fileDiv.innerHTML = `
+                    <h4>📄 ${fileResult.fileName}</h4>
+                    <div class="file-results">
+                        ${fileResult.result.results.map(r => `
+                            <div class="result-item ${r.success ? 'success' : 'error'}">
+                                <strong>[${r.itemId}]</strong>  아이템으로 파일 전송 ${r.success ? ' 성공' : r.error}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                return fileDiv.outerHTML;
+            }).join('');
+            
+            resultsDiv.style.display = 'block';
+
+            setTimeout(() => {
+                progressBar.style.display = 'none';
+            }, 2000);
+            
+        } catch (error) {
+            progressBar.style.display = 'none';
+            showStatus('파일 전송 실패: ' + error.message, false);
+            console.error('Upload error:', error);
+        }
+    }
+
+    function readFileAsBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const base64 = reader.result.split(',')[1];
+                resolve(base64);
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function showStatus(message, isSuccess) {
+        const statusElement = document.getElementById('status');
+        statusElement.textContent = message;
+        statusElement.style.display = 'block';
+        statusElement.className = 'status ' + (isSuccess ? 'success' : 'error');
+
+        setTimeout(() => {
+            statusElement.style.display = 'none';
+        }, 5000);
+    }
+
+    function viewTracker() {
+        const trackerSelector = document.getElementById('trackerSelector');
+        const projectSelector = document.getElementById('projectSelector');
+        
+        if (!trackerSelector.value) {
+            showStatus('트래커를 먼저 선택해주세요.', false);
+            return;
+        }
+        
+        const trackerId = trackerSelector.value;
+        const trackerName = trackerSelector.options[trackerSelector.selectedIndex].text;
+        const projectId = projectSelector.value;
+        
+        // Open CodeBeamer tracker in new tab
+        const trackerUrl = `http://codebeamer.mdsit.co.kr:3008/tracker/${trackerId}`;
+        window.open(trackerUrl, '_blank');
+        
+        showStatus(`트래커 열기: ${trackerName}`, true);
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/images/favicon.ico">
+    <title>Codebeamer Login</title>
+    <link rel="stylesheet" type="text/css" href="css/style.css" />
+    <link rel="stylesheet" type="text/css" href="css/darkmode.css" />
+</head>
+
+<body>
+    <header class="header">
+        <div class="logo"><a href="https://www.dwdcc.com/"><img src="images/doowon_logo.png  " alt="Logo" /></a></div>
+        <div class="title-container"><h1>Codebeamer Connector</h1><p>Report Hub </p></div>
+    </header>
+
+    <div class="login-container" style="display: none;">
+        <h2>Codebeamer Login</h2>
+        <form class="login-form" action="/login" method="POST">
+            <input type="text" name="username" placeholder="Username" autocomplete="username" required>
+            <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+            <button type="submit">Login</button>
+        </form>
+        <% if (error) { %>
+            <p class="error-message"><%= error %></p>
+        <% } %>
+    </div>
+
+    
+    <div class="auto-login-container">
+        <h2>Auto Login</h2>
+        <p>Logging in with hardcoded credentials...</p>
+        <div class="spinner"></div>
+    </div>
+    
+    <script>
+        // Auto-submit with hardcoded credentials
+        setTimeout(() => {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/login';
+            
+            const usernameInput = document.createElement('input');
+            usernameInput.type = 'hidden';
+            usernameInput.name = 'username';
+            usernameInput.value = 'sejin.park';
+            
+            const passwordInput = document.createElement('input');
+            passwordInput.type = 'hidden';
+            passwordInput.name = 'password';
+            passwordInput.value = '1234';
+            
+            form.appendChild(usernameInput);
+            form.appendChild(passwordInput);
+            document.body.appendChild(form);
+            form.submit();
+        }, 1000);
+    </script>
+
+
+</body>
+</html>
