@@ -1,0 +1,31 @@
+
+  {
+    "scripts": [
+      "app.js",
+      "node_modules/ejs/**/*.js",
+      "node_modules/express/**/*.js"
+    ],
+    "assets": [
+      "node_modules/axios/dist/node/axios.cjs",
+      "node_modules/ejs/**/*.js",
+      "node_modules/ejs/package.json",
+      "uploads/**/*",
+      "views/**/*",
+      "public/**/*",
+      "package.json",
+      "settings.json"
+    ],
+    "options": {
+      "windows": {
+        "hide": true,
+        "serviceMode": "node",
+        "serviceConfig": {
+          "name": "CodebeamerConnector",
+          "displayName": "Codebeamer Connector",
+          "description": "Codebeamer Connector for automated testing reports",
+          "stopparent": true
+        }
+      }
+    },
+    "outputPath": "./dist"
+  }

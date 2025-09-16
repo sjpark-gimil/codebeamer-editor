@@ -16,6 +16,7 @@
         <div class="title-container"><h1>CodeBeamer Report Uploader</h1><p>Upload any report to multiple tracker items</p></div>
         <div class="menu-container">
             <span class="menu-item"><img src="images/user.svg" alt="User" /><%= username %></span>
+            <a href="#" class="menu-item" onclick="handleLogout()"><img src="images/logout.svg" alt="Logout" />Logout</a>
         </div>                  
     </header>
 
@@ -239,13 +240,17 @@
     }
 
     async function fetchProjects() {
-        // Static project data for now
-        return [
-            {
-                id: 11,
-                name: "VectorCAST"
+        try {
+            const response = await fetch('/api/codebeamer/projects');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        ];
+            const projects = await response.json();
+            return projects;
+        } catch (error) {
+            console.error('Error fetching projects:', error);
+            throw error;
+        }
     }
 
     async function loadTrackers() {
@@ -281,16 +286,17 @@
     }
 
     async function fetchTrackers(projectId) {
-        // Static tracker data for now
-        if (projectId === "11") {
-            return [
-                {
-                    id: 13136,
-                    name: "Test Results"
-                }
-            ];
+        try {
+            const response = await fetch(`/api/codebeamer/projects/${projectId}/trackers`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const trackers = await response.json();
+            return trackers;
+        } catch (error) {
+            console.error('Error fetching trackers:', error);
+            throw error;
         }
-        return [];
     }
 
     async function loadItems() {
@@ -547,10 +553,16 @@
         const projectId = projectSelector.value;
         
         // Open CodeBeamer tracker in new tab
-        const trackerUrl = `http://codebeamer.mdsit.co.kr:3008/tracker/${trackerId}`;
+        const trackerUrl = `http://192.168.0.81:8080/cb/tracker/${trackerId}`;
         window.open(trackerUrl, '_blank');
         
         showStatus(`트래커 열기: ${trackerName}`, true);
+    }
+
+    function handleLogout() {
+        fetch('/logout', { method: 'GET' })
+            .then(() => window.location.href = '/login')
+            .catch(error => console.error('Logout error:', error));
     }
 </script>
 

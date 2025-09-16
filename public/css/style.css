@@ -242,7 +242,7 @@ html, body {
     padding: 100px;
     border-radius: 3px;
     border-top: 6px solid;
-    border-image: linear-gradient(to right, #565C5E 85%, #B70032 85%) 1;
+    border-image: linear-gradient(to right, #1F1B87 85%, #F7180C 85%) 1;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     background-color: white;
 }
@@ -306,7 +306,7 @@ strong {
     margin: 0 auto;
     padding: 40px;
     border-top: 6px solid;
-    border-image: linear-gradient(to right, #565C5E 85%, #B70032 85%) 1;
+    border-image: linear-gradient(to right, #1F1B87 85%, #F7180C 85%) 1;
     border-radius: 2px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     display: flex;
