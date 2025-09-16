@@ -9,7 +9,7 @@ const FormData = require('form-data');
 const crypto = require('crypto');
 
 const defaults = {
-    cbApiUrl: process.env.CB_BASE_URL || 'http://192.168.0.81:8080/cb',
+    cbApiUrl: process.env.CB_BASE_URL || '',
     sessionSecret: process.env.SESSION_SECRET || 'default-secret',
 };
 
@@ -211,7 +211,7 @@ app.get('/', requireAuth, (req, res) => {
         username: req.session.username || '',
         vectorcastPath: reportPaths.vectorcast || '',
         serverUrl: defaults.cbApiUrl,
-        cbBaseUrl: process.env.CB_BASE_URL || 'http://192.168.0.81:8080/cb'
+        cbBaseUrl: process.env.CB_BASE_URL || ''
     });
 });
 
@@ -269,7 +269,7 @@ app.get('/report-settings', requireAuth, (req, res) => {
         username: req.session.username || '',
         vectorcastPath: reportPaths.vectorcast || '',
         serverUrl: defaults.cbApiUrl,
-        trackerUrl: process.env.CB_BASE_URL || 'http://192.168.0.81:8080/cb'
+        trackerUrl: process.env.CB_BASE_URL || ''
     });
 });
 
@@ -459,7 +459,7 @@ app.get('/api/codebeamer/projects', requireAuth, async (req, res) => {
             },
             timeout: 10000,
             validateStatus: function (status) {
-                return status < 500; // Resolve only if the status code is less than 500
+                return status < 500; 
             }
         });
 
