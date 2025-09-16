@@ -104,22 +104,18 @@
         const fileInput = document.getElementById('fileInput');
         const browseBtn = document.getElementById('browseBtn');
 
-        // Click to browse - only trigger if not clicking on the browse button
         uploadArea.addEventListener('click', (event) => {
-            // Don't trigger if clicking on the browse button
             if (event.target.classList.contains('browse-btn')) {
             return;
         }
             fileInput.click();
         });
 
-        // Browse button click handler
         browseBtn.addEventListener('click', (event) => {
             event.stopPropagation(); // Prevent triggering upload area click
                 fileInput.click();
         });
 
-        // Drag and drop
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             uploadArea.addEventListener(eventName, preventDefaults, false);
         });
@@ -143,7 +139,6 @@
             }
         }, false);
 
-        // Handle file input change event
         fileInput.addEventListener('change', handleFileSelect);
     }
     
@@ -156,9 +151,7 @@
         const files = Array.from(event.target.files);
         if (files.length === 0) return;
 
-        // Add new files to existing selection
         files.forEach(file => {
-            // Check if file already exists (by name and size)
             const exists = selectedFiles.some(f => f.name === file.name && f.size === file.size);
             if (!exists) {
                 selectedFiles.push(file);
@@ -168,7 +161,6 @@
         displaySelectedFiles();
         updateUploadButton();
         
-        // Clear the input so the same files can be selected again if needed
         event.target.value = '';
     }
 
@@ -314,7 +306,6 @@
             return;
         }
 
-        // Enable view tracker button when tracker is selected
         viewTrackerBtn.disabled = false;
 
         try {
@@ -354,7 +345,6 @@
             
             const responseData = await response.json();
             
-            // Handle different response structures
             let items;
             if (Array.isArray(responseData)) {
                 items = responseData;
@@ -441,7 +431,6 @@
             
             let allResults = [];
             
-            // Process each file
             for (let fileIndex = 0; fileIndex < selectedFiles.length; fileIndex++) {
                 const file = selectedFiles[fileIndex];
                 showStatus(`파일 파일 전송 중: ${file.name} (${fileIndex + 1}/${totalFiles})`, true);
@@ -480,13 +469,11 @@
                 progressText.textContent = progress + '%';
             }
             
-            // Calculate overall results
             const totalSuccess = allResults.reduce((sum, r) => sum + r.result.successCount, 0);
             const totalFailure = allResults.reduce((sum, r) => sum + r.result.failureCount, 0);
             
             showStatus(`파일 전송 완료: ${totalSuccess}개 성공, ${totalFailure}개 실패`, totalFailure === 0);
 
-            // Display results
             resultsList.innerHTML = allResults.map(fileResult => {
                 const fileDiv = document.createElement('div');
                 fileDiv.className = 'file-result';
@@ -552,8 +539,7 @@
         const trackerName = trackerSelector.options[trackerSelector.selectedIndex].text;
         const projectId = projectSelector.value;
         
-        // Open CodeBeamer tracker in new tab
-        const trackerUrl = `http://192.168.0.81:8080/cb/tracker/${trackerId}`;
+        const trackerUrl = `<%= cbBaseUrl %>/tracker/${trackerId}`;
         window.open(trackerUrl, '_blank');
         
         showStatus(`트래커 열기: ${trackerName}`, true);

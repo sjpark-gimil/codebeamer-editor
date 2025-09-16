@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const session = require('express-session');
@@ -8,11 +9,9 @@ const FormData = require('form-data');
 const crypto = require('crypto');
 
 const defaults = {
-    cbApiUrl: 'http://192.168.0.81:8080/cb',
-    cbWebUrl: 'http://192.168.0.81:8080/cb',
-    sessionSecret: 'default-secret',
+    cbApiUrl: process.env.CB_BASE_URL || 'http://192.168.0.81:8080/cb',
+    sessionSecret: process.env.SESSION_SECRET || 'default-secret',
 };
-
 
 function normalizePath(filePath) {
     if (!filePath) return '';
@@ -26,8 +25,6 @@ function normalizePath(filePath) {
 
 let reportPaths = { vectorcast: '' };
 
-
-
 const app = express();
 const PORT = 3001;
 const HOST = '0.0.0.0';
@@ -37,8 +34,6 @@ const corsOptions = {
     allowedHeaders: ['Content-Type', 'Authorization', 'accept'],
     credentials: true
 };
-
-
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -126,7 +121,6 @@ app.get('/logout', (req, res) => {
     });
 });
 
-// Simple connectivity test endpoint
 app.get('/api/debug/ping', async (req, res) => {
     try {
         const pingUrl = `${defaults.cbApiUrl}/ping`;
@@ -155,15 +149,11 @@ app.get('/api/debug/ping', async (req, res) => {
     }
 });
 
-// Debug endpoint to test CodeBeamer connectivity
 app.get('/api/debug/codebeamer-test', requireAuth, async (req, res) => {
     const results = [];
     
-    // Test different API versions and endpoints
     const testUrls = [
         `${defaults.cbApiUrl}/api/v3/projects`,
-        `${defaults.cbApiUrl}/api/v2/projects`,
-        `${defaults.cbApiUrl}/api/v1/projects`,
         `${defaults.cbApiUrl}/api/projects`,
         `${defaults.cbApiUrl}/projects`,
         `${defaults.cbApiUrl}/cb/api/v3/projects`,
@@ -194,7 +184,6 @@ app.get('/api/debug/codebeamer-test', requireAuth, async (req, res) => {
                 dataLength: response.data ? (Array.isArray(response.data) ? response.data.length : Object.keys(response.data).length) : 0
             });
             
-            // If we get a successful response, break
             if (response.status === 200) {
                 break;
             }
@@ -221,7 +210,8 @@ app.get('/', requireAuth, (req, res) => {
         currentPath: '/',
         username: req.session.username || '',
         vectorcastPath: reportPaths.vectorcast || '',
-        serverUrl: defaults.cbApiUrl
+        serverUrl: defaults.cbApiUrl,
+        cbBaseUrl: process.env.CB_BASE_URL || 'http://192.168.0.81:8080/cb'
     });
 });
 
@@ -278,7 +268,8 @@ app.get('/report-settings', requireAuth, (req, res) => {
         currentPath: '/report-settings',
         username: req.session.username || '',
         vectorcastPath: reportPaths.vectorcast || '',
-        serverUrl: defaults.cbApiUrl
+        serverUrl: defaults.cbApiUrl,
+        trackerUrl: process.env.CB_BASE_URL || 'http://192.168.0.81:8080/cb'
     });
 });
 
@@ -331,7 +322,6 @@ async function uploadAttachmentToCodeBeamer(itemId, fileName, fileBuffer, auth) 
         
         const contentType = getContentType(fileName);
         
-        // Append the file to form data
         formData.append('attachments', fileBuffer, {
             filename: fileName,
             contentType: contentType
@@ -376,7 +366,6 @@ async function uploadAttachmentToCodeBeamer(itemId, fileName, fileBuffer, auth) 
     }
 }
 
-// New generic report upload endpoint
 app.post('/api/codebeamer/upload-report', requireAuth, async (req, res) => {
     if (!req.session || !req.session.auth) {
         return res.status(401).json({ error: 'Unauthorized user' });
@@ -397,10 +386,8 @@ app.post('/api/codebeamer/upload-report', requireAuth, async (req, res) => {
             console.log(`Processing upload ${i + 1}/${itemIds.length} for item ${itemId}`);
             
             try {
-                // Convert base64 back to buffer
                 const fileBuffer = Buffer.from(fileContent, 'base64');
                 
-                // Upload attachment to CodeBeamer
                 const attachmentResult = await uploadAttachmentToCodeBeamer(
                     itemId, 
                     fileName, 
@@ -423,7 +410,6 @@ app.post('/api/codebeamer/upload-report', requireAuth, async (req, res) => {
                     });
                 }
 
-                // Add delay to avoid rate limiting for multiple uploads
                 if (i < itemIds.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
