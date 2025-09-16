@@ -1903,7 +1903,7 @@ select.report-select option {
 
 .pagination button:hover:not(:disabled) {
     background: #f8f9fa;
-    border-color: #007bff;
+    border-color: #201B87;
 }
 
 .pagination button:disabled {
@@ -1933,13 +1933,14 @@ select.report-select option {
 
 .page-btn:hover {
     background: #f8f9fa;
-    border-color: #007bff;
+    border-color: #201B87;
+    color: #201B87;
 }
 
 .page-btn.active {
-    background: #007bff;
+    background: #201B87;
     color: white;
-    border-color: #007bff;
+    border-color: #201B87;
 }
 
 .ellipsis {

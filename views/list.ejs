@@ -62,7 +62,7 @@
                     <h3>리포트를 첨부할 아이템 선택</h3>
                     <div class="items-controls">
                         <div class="pagination-controls">
-                            <label for="itemsPerPage">페이지당 아이템:</label>
+                            <label for="itemsPerPage">페이지 당 아이템:</label>
                             <select id="itemsPerPage" onchange="changeItemsPerPage()">
                                 <option value="10">10</option>
                                 <option value="25" selected>25</option>
@@ -330,7 +330,7 @@
         viewTrackerBtn.disabled = false;
 
         try {
-            showStatus('Loading items from all pages (this may take a moment for large trackers)...', true);
+            showStatus('전체 아이템 로딩 중 (아이템이 많을 경우 다소 시간이 걸릴 수도 있습니다.)...', true);
             allItems = await fetchItems(trackerSelector.value);
             
             currentPage = 1;
@@ -659,7 +659,7 @@
         const paginationInfo = document.getElementById('paginationInfo');
         const startIndex = (currentPage - 1) * itemsPerPage + 1;
         const endIndex = Math.min(currentPage * itemsPerPage, allItems.length);
-        paginationInfo.textContent = `페이지 ${currentPage} / ${totalPages} (${startIndex}-${endIndex} / ${allItems.length}개 아이템)`;
+        paginationInfo.textContent = `페이지 ${currentPage} / ${totalPages} (${startIndex}-${endIndex} / ${allItems.length}개의 아이템)`;
     }
 
     function goToPage(page) {
