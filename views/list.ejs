@@ -61,15 +61,32 @@
                 <div class="items-header">
                     <h3>리포트를 첨부할 아이템 선택</h3>
                     <div class="items-controls">
-                        <button class="select-all-btn" onclick="selectAllItems()">전체 선택</button>
-                        <button class="clear-selection-btn" onclick="clearSelection()">선택 초기화</button>
-            </div>
-        </div>
+                        <div class="pagination-controls">
+                            <label for="itemsPerPage">페이지당 아이템:</label>
+                            <select id="itemsPerPage" onchange="changeItemsPerPage()">
+                                <option value="10">10</option>
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <div class="selection-controls">
+                            <button class="select-all-btn" onclick="selectAllItems()">전체 선택</button>
+                            <button class="clear-selection-btn" onclick="clearSelection()">선택 초기화</button>
+                        </div>
+                    </div>
+                </div>
                 <div class="items-list" id="itemsList">
                     <!-- Items will be populated here -->
-                        </div>
+                </div>
+                <div class="pagination" id="pagination" style="display: none;">
+                    <button id="prevPage" onclick="changePage(-1)" disabled>이전</button>
+                    <div class="page-numbers" id="pageNumbers"></div>
+                    <button id="nextPage" onclick="changePage(1)" disabled>다음</button>
+                </div>
+                <div class="pagination-info" id="paginationInfo"></div>
                 <div class="selected-count" id="selectedCount">0개의 아이템이 선택됨</div>
-                    </div>
+            </div>
                 </div>
                 
         <div class="action-section">
@@ -93,6 +110,10 @@
 <script>
     let selectedFiles = [];
     let selectedItems = new Set();
+    let allItems = [];
+    let currentPage = 1;
+    let itemsPerPage = 25;
+    let totalPages = 1;
 
     document.addEventListener('DOMContentLoaded', () => {
         initFileUpload();
@@ -309,26 +330,21 @@
         viewTrackerBtn.disabled = false;
 
         try {
-            const items = await fetchItems(trackerSelector.value);
+            showStatus('Loading items from all pages (this may take a moment for large trackers)...', true);
+            allItems = await fetchItems(trackerSelector.value);
             
-            itemsList.innerHTML = '';
-            items.forEach(item => {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'item-checkbox';
-                itemDiv.innerHTML = `
-                    <input type="checkbox" id="item-${item.id}" value="${item.id}" onchange="toggleItem(${item.id})">
-                    <label for="item-${item.id}">
-                        <span class="item-id">${item.id}</span>
-                        <span class="item-name">${item.name}</span>
-                    </label>
-                `;
-                itemsList.appendChild(itemDiv);
-            });
+            currentPage = 1;
+            itemsPerPage = parseInt(document.getElementById('itemsPerPage').value);
+            totalPages = Math.ceil(allItems.length / itemsPerPage);
+            
+            displayItems();
+            updatePagination();
             
             itemsSelection.style.display = 'block';
+            showStatus(`Successfully loaded ${allItems.length} items from all pages`, true);
         } catch (error) {
             console.error('Error loading items:', error);
-            showStatus('Failed to load items', false);
+            showStatus('Failed to load items - this may be due to rate limiting. Please try again in a moment.', false);
         }
     }
 
@@ -549,6 +565,123 @@
         fetch('/logout', { method: 'GET' })
             .then(() => window.location.href = '/login')
             .catch(error => console.error('Logout error:', error));
+    }
+
+    function displayItems() {
+        const itemsList = document.getElementById('itemsList');
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const pageItems = allItems.slice(startIndex, endIndex);
+        
+        itemsList.innerHTML = '';
+        pageItems.forEach(item => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'item-checkbox';
+            itemDiv.innerHTML = `
+                <input type="checkbox" id="item-${item.id}" value="${item.id}" onchange="toggleItem(${item.id})" ${selectedItems.has(item.id) ? 'checked' : ''}>
+                <label for="item-${item.id}">
+                    <span class="item-id">${item.id}</span>
+                    <span class="item-name">${item.name}</span>
+                </label>
+            `;
+            itemsList.appendChild(itemDiv);
+        });
+        
+        updatePaginationInfo();
+    }
+
+    function updatePagination() {
+        const pagination = document.getElementById('pagination');
+        const pageNumbers = document.getElementById('pageNumbers');
+        const prevBtn = document.getElementById('prevPage');
+        const nextBtn = document.getElementById('nextPage');
+        
+        if (totalPages <= 1) {
+            pagination.style.display = 'none';
+            return;
+        }
+        
+        pagination.style.display = 'flex';
+        
+        prevBtn.disabled = currentPage === 1;
+        nextBtn.disabled = currentPage === totalPages;
+        
+        pageNumbers.innerHTML = '';
+        
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+        
+        if (endPage - startPage + 1 < maxVisiblePages) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+        
+        if (startPage > 1) {
+            const firstPageBtn = document.createElement('button');
+            firstPageBtn.textContent = '1';
+            firstPageBtn.onclick = () => goToPage(1);
+            firstPageBtn.className = currentPage === 1 ? 'page-btn active' : 'page-btn';
+            pageNumbers.appendChild(firstPageBtn);
+            
+            if (startPage > 2) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                ellipsis.className = 'ellipsis';
+                pageNumbers.appendChild(ellipsis);
+            }
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const pageBtn = document.createElement('button');
+            pageBtn.textContent = i;
+            pageBtn.onclick = () => goToPage(i);
+            pageBtn.className = currentPage === i ? 'page-btn active' : 'page-btn';
+            pageNumbers.appendChild(pageBtn);
+        }
+        
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                ellipsis.className = 'ellipsis';
+                pageNumbers.appendChild(ellipsis);
+            }
+            
+            const lastPageBtn = document.createElement('button');
+            lastPageBtn.textContent = totalPages;
+            lastPageBtn.onclick = () => goToPage(totalPages);
+            lastPageBtn.className = currentPage === totalPages ? 'page-btn active' : 'page-btn';
+            pageNumbers.appendChild(lastPageBtn);
+        }
+    }
+
+    function updatePaginationInfo() {
+        const paginationInfo = document.getElementById('paginationInfo');
+        const startIndex = (currentPage - 1) * itemsPerPage + 1;
+        const endIndex = Math.min(currentPage * itemsPerPage, allItems.length);
+        paginationInfo.textContent = `페이지 ${currentPage} / ${totalPages} (${startIndex}-${endIndex} / ${allItems.length}개 아이템)`;
+    }
+
+    function goToPage(page) {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        displayItems();
+        updatePagination();
+    }
+
+    function changePage(direction) {
+        const newPage = currentPage + direction;
+        if (newPage >= 1 && newPage <= totalPages) {
+            goToPage(newPage);
+        }
+    }
+
+    function changeItemsPerPage() {
+        itemsPerPage = parseInt(document.getElementById('itemsPerPage').value);
+        totalPages = Math.ceil(allItems.length / itemsPerPage);
+        currentPage = 1;
+        displayItems();
+        updatePagination();
     }
 </script>
 

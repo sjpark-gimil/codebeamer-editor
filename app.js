@@ -516,17 +516,72 @@ app.get('/api/codebeamer/trackers/:trackerId/items', requireAuth, async (req, re
 
     try {
         const { trackerId } = req.params;
-        const codebeamerUrl = `${defaults.cbApiUrl}/api/v3/trackers/${trackerId}/items`;
-        
-        const response = await axios.get(codebeamerUrl, {
-            headers: {
-                'Authorization': `Basic ${req.session.auth}`,
-                'Content-Type': 'application/json',
-                'accept': 'application/json'
-            }
-        });
+        const { maxItems } = req.query;
+        const pageSize = 25;
+        let allItems = [];
+        let currentPage = 1;
+        let hasMorePages = true;
 
-        res.json(response.data);
+        while (hasMorePages) {
+            const codebeamerUrl = `${defaults.cbApiUrl}/api/v3/trackers/${trackerId}/items?page=${currentPage}&pageSize=${pageSize}`;
+            
+            console.log(`Fetching page ${currentPage} from: ${codebeamerUrl}`);
+            
+            try {
+                const response = await axios.get(codebeamerUrl, {
+                    headers: {
+                        'Authorization': `Basic ${req.session.auth}`,
+                        'Content-Type': 'application/json',
+                        'accept': 'application/json'
+                    }
+                });
+
+                const responseData = response.data;
+                let pageItems = [];
+
+                if (Array.isArray(responseData)) {
+                    pageItems = responseData;
+                } else if (responseData.itemRefs && Array.isArray(responseData.itemRefs)) {
+                    pageItems = responseData.itemRefs;
+                } else if (responseData.items && Array.isArray(responseData.items)) {
+                    pageItems = responseData.items;
+                } else if (responseData.data && Array.isArray(responseData.data)) {
+                    pageItems = responseData.data;
+                }
+
+                allItems = allItems.concat(pageItems);
+                
+                hasMorePages = pageItems.length === pageSize;
+                currentPage++;
+                
+                if (maxItems && allItems.length >= parseInt(maxItems)) {
+                    console.log(`Reached maximum items limit (${maxItems}), stopping pagination`);
+                    allItems = allItems.slice(0, parseInt(maxItems));
+                    break;
+                }
+                
+                if (currentPage > 100) {
+                    console.warn('Reached maximum page limit (100), stopping pagination');
+                    break;
+                }
+
+                if (hasMorePages) {
+                    console.log(`Waiting 1 second before fetching next page...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            } catch (error) {
+                if (error.response && error.response.status === 429) {
+                    console.log('Rate limit hit, waiting 5 seconds before retrying...');
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    continue;
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+        console.log(`Fetched ${allItems.length} total items across ${currentPage - 1} pages`);
+        res.json(allItems);
     } catch (error) {
         console.error('Error fetching items:', error.message);
         res.status(500).json({ error: 'Failed to fetch items' });

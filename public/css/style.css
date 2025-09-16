@@ -1846,6 +1846,115 @@ select.report-select option {
     background: #c82333;
 }
 
+/* Pagination Styles */
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: 20px;
+}
+
+.pagination-controls label {
+    font-size: 0.9em;
+    color: #666;
+    white-space: nowrap;
+}
+
+.pagination-controls select {
+    padding: 5px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9em;
+    background: white;
+}
+
+.items-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.selection-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    margin: 20px 0;
+    padding: 10px;
+}
+
+.pagination button {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    background: white;
+    color: #333;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.9em;
+    transition: all 0.2s ease;
+}
+
+.pagination button:hover:not(:disabled) {
+    background: #f8f9fa;
+    border-color: #007bff;
+}
+
+.pagination button:disabled {
+    background: #f8f9fa;
+    color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.page-numbers {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.page-btn {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    background: white;
+    color: #333;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.9em;
+    min-width: 32px;
+    transition: all 0.2s ease;
+}
+
+.page-btn:hover {
+    background: #f8f9fa;
+    border-color: #007bff;
+}
+
+.page-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.ellipsis {
+    padding: 6px 4px;
+    color: #6c757d;
+    font-size: 0.9em;
+}
+
+.pagination-info {
+    text-align: center;
+    color: #666;
+    font-size: 0.9em;
+    margin: 10px 0;
+}
+
 /* File Results Display */
 .file-result {
     margin-bottom: 20px;
