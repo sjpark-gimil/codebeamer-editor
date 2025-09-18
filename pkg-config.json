@@ -13,7 +13,8 @@
       "views/**/*",
       "public/**/*",
       "package.json",
-      "settings.json"
+      "settings.json",
+      ".env"
     ],
     "options": {
       "windows": {
@@ -21,8 +22,6 @@
         "serviceMode": "node",
         "serviceConfig": {
           "name": "CodebeamerConnector",
-          "displayName": "Codebeamer Connector",
-          "description": "Codebeamer Connector for automated testing reports",
           "stopparent": true
         }
       }

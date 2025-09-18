@@ -1,5 +1,5 @@
 {
-  "name": "codebeamer-atf",
+  "name": "codebeamer-connector",
   "version": "1.0.0",
   "main": "app.js",
   "bin": {
@@ -54,7 +54,6 @@
       "../views/**/*",
       "../public/**/*",
       ".env",
-      "node_modules/tough-cookie/**/*.js",
       "node_modules/fs-extra/**/*.js",
       "node_modules/express/**/*.js",
       "node_modules/ejs/**/*.js",

@@ -1,7 +1,6 @@
-require('dotenv').config();
+require('dotenv').config({ path: __dirname + '/.env' });
 const express = require('express');
 const axios = require('axios');
-const session = require('express-session');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
@@ -9,9 +8,28 @@ const FormData = require('form-data');
 const crypto = require('crypto');
 
 const defaults = {
-    cbApiUrl: process.env.CB_BASE_URL || '',
-    sessionSecret: process.env.SESSION_SECRET || 'default-secret',
+    cbApiUrl: process.env.CB_BASE_URL || '192.168.0.81:8080',
 };
+
+function normalizeCodebeamerUrl(baseUrl) {
+    if (!baseUrl) return '';
+    
+    let url = baseUrl.trim();
+    
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'http://' + url;
+    }
+    
+    if (!url.endsWith('/')) {
+        url = url + '/';
+    }
+    
+    if (!url.includes('/cb/') && !url.endsWith('/cb')) {
+        url = url + 'cb/';
+    }
+    
+    return url.replace(/\/+$/, '/');
+}
 
 function normalizePath(filePath) {
     if (!filePath) return '';
@@ -41,16 +59,8 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors(corsOptions));
-app.use(session({  
-    secret: defaults.sessionSecret,  
-    resave: false,  
-    saveUninitialized: false,
-    cookie: {
-        secure: false, 
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 
-    }
-}));
+
+// Middleware to log all requests
 
 console.log('Starting application in normal mode');
 loadSettingsFromLocalStorage();
@@ -59,10 +69,9 @@ startApp();
 function startApp() {
     try {
         const server = app.listen(PORT, HOST, () => {
-            console.log(`Server running on port ${PORT} on ${HOST} (all interfaces)`);
+            console.log(`Server running on http://localhost:${PORT}`);
         }).on('error', (err) => {
             console.error('Server error:', err.message);
-            console.log('Trying to restart server in 10 seconds...');
             setTimeout(() => {
                 startApp();
             }, 10000);
@@ -78,15 +87,16 @@ function startApp() {
     }
 }
 
-function requireAuth(req, res, next) {
-    if (req.session && req.session.auth) {
-        next();
-    } else {
-        res.redirect('/login');
-    }
-}
 
-app.get('/login', (req, res) => {
+
+
+
+
+app.get('/test', (req, res) => {
+    res.json({ message: 'Server is working', timestamp: new Date().toISOString() });
+});
+
+app.get('/', (req, res) => {
     res.render('login', { error: null });
 });
 
@@ -94,124 +104,22 @@ app.post('/login', (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) { 
         return res.render('login', { 
-            error: 'Username and password are required',
-            serverUrl: defaults.cbApiUrl
+            error: 'Username and password are required'
         }); 
     }
-
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    req.session.auth = auth;
-    req.session.username = username;
-    req.session.save((err) => {
-        if (err) {
-            console.error('Session save error:', err);
-            return res.render('login', { 
-                error: 'Session error occurred',
-                serverUrl: defaults.cbApiUrl
-            });
-        }
-        res.redirect('/');
-    });
+    res.redirect(`/main?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
 });
 
-app.get('/logout', (req, res) => {
-    req.session.destroy((err) => {
-        if (err) { console.error('Error destroying session:', err); }
-        res.redirect('/login');
-    });
-});
-
-app.get('/api/debug/ping', async (req, res) => {
-    try {
-        const pingUrl = `${defaults.cbApiUrl}/ping`;
-        console.log('Pinging CodeBeamer at:', pingUrl);
-        
-        const response = await axios.get(pingUrl, {
-            timeout: 5000,
-            validateStatus: function (status) {
-                return status < 500;
-            }
-        });
-
-        res.json({
-            success: true,
-            url: pingUrl,
-            status: response.status,
-            message: 'CodeBeamer is reachable'
-        });
-    } catch (error) {
-        res.json({
-            success: false,
-            url: pingUrl,
-            error: error.message,
-            message: 'CodeBeamer is not reachable'
-        });
+app.get('/main', (req, res) => {
+    const { username, password } = req.query;
+    if (!username || !password) {
+        return res.redirect('/');
     }
-});
-
-app.get('/api/debug/codebeamer-test', requireAuth, async (req, res) => {
-    const results = [];
-    
-    const testUrls = [
-        `${defaults.cbApiUrl}/api/v3/projects`,
-        `${defaults.cbApiUrl}/api/projects`,
-        `${defaults.cbApiUrl}/projects`,
-        `${defaults.cbApiUrl}/cb/api/v3/projects`,
-        `${defaults.cbApiUrl}/cb/api/v2/projects`
-    ];
-    
-    for (const testUrl of testUrls) {
-        try {
-            console.log('Testing CodeBeamer connectivity to:', testUrl);
-            
-            const response = await axios.get(testUrl, {
-                headers: {
-                    'Authorization': `Basic ${req.session.auth}`,
-                    'Content-Type': 'application/json',
-                    'accept': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                },
-                timeout: 5000,
-                validateStatus: function (status) {
-                    return status < 500;
-                }
-            });
-
-            results.push({
-                url: testUrl,
-                success: true,
-                status: response.status,
-                dataLength: response.data ? (Array.isArray(response.data) ? response.data.length : Object.keys(response.data).length) : 0
-            });
-            
-            if (response.status === 200) {
-                break;
-            }
-        } catch (error) {
-            results.push({
-                url: testUrl,
-                success: false,
-                error: error.message,
-                status: error.response ? error.response.status : 'No response'
-            });
-        }
-    }
-    
-    res.json({
-        auth: req.session.auth,
-        username: req.session.username,
-        baseUrl: defaults.cbApiUrl,
-        results: results
-    });
-});
-
-app.get('/', requireAuth, (req, res) => {
     res.render('list', {
         currentPath: '/',
-        username: req.session.username || '',
         vectorcastPath: reportPaths.vectorcast || '',
-        serverUrl: defaults.cbApiUrl,
-        cbBaseUrl: process.env.CB_BASE_URL || ''
+        serverUrl: normalizeCodebeamerUrl(defaults.cbApiUrl),
+        cbBaseUrl: defaults.cbApiUrl
     });
 });
 
@@ -240,16 +148,18 @@ app.post('/settings', (req, res) => {
 
 function loadSettingsFromLocalStorage() {
     try {
-        const settings = JSON.parse(fs.readFileSync(path.join(__dirname, 'settings.json'), 'utf8'));
-        if (settings.reportPaths) {
-            for (const [key, value] of Object.entries(settings.reportPaths)) {
-                if (value) reportPaths[key] = normalizePath(value);
+        if (fs.existsSync(path.join(__dirname, 'settings.json'))) {
+            const settings = JSON.parse(fs.readFileSync(path.join(__dirname, 'settings.json'), 'utf8'));
+            if (settings.reportPaths) {
+                for (const [key, value] of Object.entries(settings.reportPaths)) {
+                    if (value) reportPaths[key] = normalizePath(value);
+                }
             }
-        }
-        if (settings.serverUrl) {
-            console.log('Loading serverUrl from settings:', settings.serverUrl);
-            defaults.cbApiUrl = settings.serverUrl;
-            console.log('defaults.cbApiUrl set to:', defaults.cbApiUrl);
+            if (settings.serverUrl) {
+                console.log('Loading serverUrl from settings:', settings.serverUrl);
+                defaults.cbApiUrl = settings.serverUrl;
+                console.log('defaults.cbApiUrl set to:', defaults.cbApiUrl);
+            }
         }
     } catch (error) {
         console.log('Error loading settings:', error.message);
@@ -263,10 +173,9 @@ app.get('/settings/paths', (req, res) => {
     });
 });
 
-app.get('/report-settings', requireAuth, (req, res) => {
+app.get('/report-settings', (req, res) => {
     res.render('report-settings', {
         currentPath: '/report-settings',
-        username: req.session.username || '',
         vectorcastPath: reportPaths.vectorcast || '',
         serverUrl: defaults.cbApiUrl,
         trackerUrl: process.env.CB_BASE_URL || ''
@@ -327,7 +236,8 @@ async function uploadAttachmentToCodeBeamer(itemId, fileName, fileBuffer, auth) 
             contentType: contentType
         });
 
-        const attachmentUrl = `${defaults.cbApiUrl}/api/v3/items/${itemId}/attachments`;
+        const normalizedUrl = normalizeCodebeamerUrl(defaults.cbApiUrl);
+        const attachmentUrl = `${normalizedUrl}api/v3/items/${itemId}/attachments`;
         console.log(`Attachment upload URL: ${attachmentUrl}`);
         
         const response = await axios.post(attachmentUrl, formData, {
@@ -366,16 +276,16 @@ async function uploadAttachmentToCodeBeamer(itemId, fileName, fileBuffer, auth) 
     }
 }
 
-app.post('/api/codebeamer/upload-report', requireAuth, async (req, res) => {
-    if (!req.session || !req.session.auth) {
-        return res.status(401).json({ error: 'Unauthorized user' });
-    }
-
+app.post('/api/codebeamer/upload-report', async (req, res) => {
     try {
-        const { fileName, fileContent, itemIds } = req.body;
+        const { fileName, fileContent, itemIds, username, password } = req.body;
         
         if (!fileName || !fileContent || !itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
             return res.status(400).json({ error: 'Missing required fields: fileName, fileContent, and itemIds array' });
+        }
+        
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
         }
 
         const results = [];
@@ -388,11 +298,12 @@ app.post('/api/codebeamer/upload-report', requireAuth, async (req, res) => {
             try {
                 const fileBuffer = Buffer.from(fileContent, 'base64');
                 
+                const auth = Buffer.from(`${username}:${password}`).toString('base64');
                 const attachmentResult = await uploadAttachmentToCodeBeamer(
                     itemId, 
                     fileName, 
                     fileBuffer, 
-                    req.session.auth
+                    auth
                 );
                 
                 if (attachmentResult.success) {
@@ -439,20 +350,25 @@ app.post('/api/codebeamer/upload-report', requireAuth, async (req, res) => {
     }
 });
 
-app.get('/api/codebeamer/projects', requireAuth, async (req, res) => {
-    if (!req.session || !req.session.auth) {
-        return res.status(401).json({ error: '인가되지 않은 사용자입니다' });
-    }
-
+app.get('/api/codebeamer/projects', async (req, res) => {
+    console.log('=== API PROJECTS ENDPOINT CALLED ===');
     try {
-        const codebeamerUrl = `${defaults.cbApiUrl}/api/v3/projects`;
-        console.log('Fetching projects from:', codebeamerUrl);
-        console.log('Using auth:', req.session.auth);
-        console.log('Username:', req.session.username);
+        const { username, password } = req.query;
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
         
+        const normalizedUrl = normalizeCodebeamerUrl(defaults.cbApiUrl);
+        const codebeamerUrl = `${normalizedUrl}api/v3/projects`;
+        
+        console.log('CB_BASE_URL:', process.env.CB_BASE_URL);
+        console.log('Normalized URL:', normalizedUrl);
+        console.log('Final CodeBeamer URL:', codebeamerUrl);
+        
+        const auth = Buffer.from(`${username}:${password}`).toString('base64');
         const response = await axios.get(codebeamerUrl, {
             headers: {
-                'Authorization': `Basic ${req.session.auth}`,
+                'Authorization': `Basic ${auth}`,
                 'Content-Type': 'application/json',
                 'accept': 'application/json',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -462,21 +378,18 @@ app.get('/api/codebeamer/projects', requireAuth, async (req, res) => {
                 return status < 500; 
             }
         });
-
-        console.log('Response status:', response.status);
-        console.log('Response headers:', response.headers);
         
         if (response.status === 401) {
-            console.error('Authentication failed - 401 Unauthorized');
             return res.status(401).json({ 
-                error: 'Authentication failed with external CodeBeamer instance',
-                details: 'Please check if the external IP requires different authentication or API version'
+                error: 'Authentication failed with CodeBeamer instance',
+                details: 'Please check your username and password'
             });
         }
-
+        
         res.json(response.data);
     } catch (error) {
         console.error('Error fetching projects:', error.message);
+        console.error('Error stack:', error.stack);
         if (error.response) {
             console.error('Error response status:', error.response.status);
             console.error('Error response data:', error.response.data);
@@ -485,18 +398,21 @@ app.get('/api/codebeamer/projects', requireAuth, async (req, res) => {
     }
 });
 
-app.get('/api/codebeamer/projects/:projectId/trackers', requireAuth, async (req, res) => {
-    if (!req.session || !req.session.auth) {
-        return res.status(401).json({ error: '인가되지 않은 사용자입니다' });
-    }
-
+app.get('/api/codebeamer/projects/:projectId/trackers', async (req, res) => {
     try {
         const { projectId } = req.params;
-        const codebeamerUrl = `${defaults.cbApiUrl}/api/v3/projects/${projectId}/trackers`;
+        const { username, password } = req.query;
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
         
+        const normalizedUrl = normalizeCodebeamerUrl(defaults.cbApiUrl);
+        const codebeamerUrl = `${normalizedUrl}api/v3/projects/${projectId}/trackers`;
+        
+        const auth = Buffer.from(`${username}:${password}`).toString('base64');
         const response = await axios.get(codebeamerUrl, {
             headers: {
-                'Authorization': `Basic ${req.session.auth}`,
+                'Authorization': `Basic ${auth}`,
                 'Content-Type': 'application/json',
                 'accept': 'application/json'
             }
@@ -509,28 +425,30 @@ app.get('/api/codebeamer/projects/:projectId/trackers', requireAuth, async (req,
     }
 });
 
-app.get('/api/codebeamer/trackers/:trackerId/items', requireAuth, async (req, res) => {
-    if (!req.session || !req.session.auth) {
-        return res.status(401).json({ error: '인가되지 않은 사용자입니다' });
-    }
-
+app.get('/api/codebeamer/trackers/:trackerId/items', async (req, res) => {
     try {
         const { trackerId } = req.params;
-        const { maxItems } = req.query;
+        const { maxItems, username, password } = req.query;
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
+        
         const pageSize = 25;
         let allItems = [];
         let currentPage = 1;
         let hasMorePages = true;
 
         while (hasMorePages) {
-            const codebeamerUrl = `${defaults.cbApiUrl}/api/v3/trackers/${trackerId}/items?page=${currentPage}&pageSize=${pageSize}`;
+            const normalizedUrl = normalizeCodebeamerUrl(defaults.cbApiUrl);
+            const codebeamerUrl = `${normalizedUrl}api/v3/trackers/${trackerId}/items?page=${currentPage}&pageSize=${pageSize}`;
             
             console.log(`Fetching page ${currentPage} from: ${codebeamerUrl}`);
             
             try {
+                const auth = Buffer.from(`${username}:${password}`).toString('base64');
                 const response = await axios.get(codebeamerUrl, {
                     headers: {
-                        'Authorization': `Basic ${req.session.auth}`,
+                        'Authorization': `Basic ${auth}`,
                         'Content-Type': 'application/json',
                         'accept': 'application/json'
                     }
@@ -586,5 +504,10 @@ app.get('/api/codebeamer/trackers/:trackerId/items', requireAuth, async (req, re
         console.error('Error fetching items:', error.message);
         res.status(500).json({ error: 'Failed to fetch items' });
     }
+});
+
+// Catch-all route to redirect any other paths to login (MUST be last)
+app.get('*', (req, res) => {
+    res.redirect('/');
 });
 

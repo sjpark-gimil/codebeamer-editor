@@ -15,8 +15,8 @@
         <div class="logo"><a href="https://www.dwdcc.com/"><img src="images/doowon_logo.png" alt="Logo" /></a></div>
         <div class="title-container"><h1>Codebeamer Report Uploader</h1><p>Upload any report to multiple tracker items</p></div>
         <div class="menu-container">
-            <span class="menu-item"><img src="images/user.svg" alt="User" /><%= username %></span>
-            <a href="#" class="menu-item" onclick="handleLogout()"><img src="images/logout.svg" alt="Logout" />Logout</a>
+            <span class="menu-item"><img src="images/user.svg" alt="User" /><span id="usernameDisplay">Loading...</span></span>
+            <a href="/" class="menu-item"><img src="images/logout.svg" alt="Logout" />Logout</a>
         </div>                  
     </header>
 
@@ -94,6 +94,11 @@
                 📎 선택한 아이템에 리포트 첨부
             </button>
                 </div>
+        
+        <div id="itemsLoading" class="loading-indicator" style="display: none;">
+            <div class="loading-spinner"></div>
+            <span class="loading-text">아이템 목록을 불러오는 중...</span>
+        </div>
             
         <div id="status" class="status"></div>
         <div id="progress" class="progress-bar" style="display: none;">
@@ -117,7 +122,6 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         initFileUpload();
-        loadProjects();
     });
 
     function initFileUpload() {
@@ -252,9 +256,57 @@
         }
     }
 
+    let currentUsername = '';
+    let currentPassword = '';
+
+    function setCredentials(username, password) {
+        currentUsername = username;
+        currentPassword = password;
+        
+        // Update the username display in the header
+        const usernameDisplay = document.getElementById('usernameDisplay');
+        if (usernameDisplay) {
+            usernameDisplay.textContent = username;
+        }
+    }
+
+    // Get credentials from URL parameters
+    function getCredentialsFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const username = decodeURIComponent(urlParams.get('username') || '');
+        const password = decodeURIComponent(urlParams.get('password') || '');
+        
+        
+        if (username && password) {
+            setCredentials(username, password);
+            // Remove credentials from URL for security
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else {
+            // No credentials, redirect to login
+            window.location.href = '/';
+        }
+    }
+
+    // Initialize credentials when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        getCredentialsFromUrl();
+        // After credentials are set, load projects
+        if (currentUsername && currentPassword) {
+            loadProjects();
+        } else {
+        }
+    });
+
     async function fetchProjects() {
         try {
-            const response = await fetch('/api/codebeamer/projects');
+            
+            if (!currentUsername || !currentPassword) {
+                throw new Error('Credentials not set');
+            }
+            
+            const url = `/api/codebeamer/projects?username=${encodeURIComponent(currentUsername)}&password=${encodeURIComponent(currentPassword)}`;
+            
+            const response = await fetch(url);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -300,7 +352,7 @@
 
     async function fetchTrackers(projectId) {
         try {
-            const response = await fetch(`/api/codebeamer/projects/${projectId}/trackers`);
+            const response = await fetch(`/api/codebeamer/projects/${projectId}/trackers?username=${encodeURIComponent(currentUsername)}&password=${encodeURIComponent(currentPassword)}`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -330,6 +382,8 @@
         viewTrackerBtn.disabled = false;
 
         try {
+            const itemsLoading = document.getElementById('itemsLoading');
+            itemsLoading.style.display = 'flex';
             showStatus('전체 아이템 로딩 중 (아이템이 많을 경우 다소 시간이 걸릴 수도 있습니다.)...', true);
             allItems = await fetchItems(trackerSelector.value);
             
@@ -345,14 +399,16 @@
         } catch (error) {
             console.error('Error loading items:', error);
             showStatus('Failed to load items - this may be due to rate limiting. Please try again in a moment.', false);
+        } finally {
+            const itemsLoading = document.getElementById('itemsLoading');
+            itemsLoading.style.display = 'none';
         }
     }
 
     async function fetchItems(trackerId) {
         try {
-            const response = await fetch(`/api/codebeamer/trackers/${trackerId}/items`, {
-                method: 'GET',
-                credentials: 'include'
+            const response = await fetch(`/api/codebeamer/trackers/${trackerId}/items?username=${encodeURIComponent(currentUsername)}&password=${encodeURIComponent(currentPassword)}`, {
+                method: 'GET'
             });
             
             if (!response.ok) {
@@ -455,7 +511,9 @@
                 const uploadData = {
                     fileName: file.name,
                     fileContent: fileContent,
-                    itemIds: Array.from(selectedItems)
+                    itemIds: Array.from(selectedItems),
+                    username: currentUsername,
+                    password: currentPassword
                 };
 
                 const response = await fetch('/api/codebeamer/upload-report', {
@@ -464,8 +522,7 @@
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify(uploadData),
-                    credentials: 'include'
+                    body: JSON.stringify(uploadData)
                 });
                 
                 if (!response.ok) {
@@ -542,6 +599,26 @@
         }, 5000);
     }
 
+    function normalizeCodebeamerUrl(baseUrl) {
+        if (!baseUrl) return '';
+        
+        let url = baseUrl.trim();
+        
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            url = 'http://' + url;
+        }
+        
+        if (!url.endsWith('/')) {
+            url = url + '/';
+        }
+        
+        if (!url.includes('/cb/') && !url.includes('/cb')) {
+            url = url + 'cb/';
+        }
+        
+        return url.replace(/\/+$/, '/');
+    }
+
     function viewTracker() {
         const trackerSelector = document.getElementById('trackerSelector');
         const projectSelector = document.getElementById('projectSelector');
@@ -555,7 +632,8 @@
         const trackerName = trackerSelector.options[trackerSelector.selectedIndex].text;
         const projectId = projectSelector.value;
         
-        const trackerUrl = `<%= cbBaseUrl %>/tracker/${trackerId}`;
+        const normalizedBaseUrl = normalizeCodebeamerUrl('<%= cbBaseUrl %>');
+        const trackerUrl = `${normalizedBaseUrl}tracker/${trackerId}`;
         window.open(trackerUrl, '_blank');
         
         showStatus(`트래커 열기: ${trackerName}`, true);
