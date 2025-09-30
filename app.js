@@ -8,7 +8,7 @@ const FormData = require('form-data');
 const crypto = require('crypto');
 
 const defaults = {
-    cbApiUrl: process.env.CB_BASE_URL || '192.168.0.81:8080',
+    cbApiUrl: process.env.CB_BASE_URL || '211.238.111.33:8080',
 };
 
 function normalizeCodebeamerUrl(baseUrl) {
@@ -24,8 +24,8 @@ function normalizeCodebeamerUrl(baseUrl) {
         url = url + '/';
     }
     
-    if (!url.includes('/cb/') && !url.endsWith('/cb')) {
-        url = url + 'cb/';
+   if (!url.includes('/cb/') && !url.endsWith('/cb')) {
+      url = url + 'cb/';
     }
     
     return url.replace(/\/+$/, '/');
@@ -45,7 +45,7 @@ let reportPaths = { vectorcast: '' };
 
 const app = express();
 const PORT = 3001;
-const HOST = '0.0.0.0';
+const HOST = 'localhost';
 const corsOptions = { 
     origin: '*', 
     methods: ['GET', 'PUT', 'POST', 'DELETE'], 
@@ -68,7 +68,7 @@ startApp();
 
 function startApp() {
     try {
-        const server = app.listen(PORT, HOST, () => {
+        const server = app.listen(PORT, () => {
             console.log(`Server running on http://localhost:${PORT}`);
         }).on('error', (err) => {
             console.error('Server error:', err.message);

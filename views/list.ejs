@@ -76,6 +76,20 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Search Filter Widget -->
+                <div class="search-filter-widget" id="searchFilterWidget">
+                    <div class="search-input-container">
+                        <span class="search-prefix">></span>
+                        <input type="text" id="searchInput" placeholder="아이템 검색..." class="search-input">
+                        <div class="search-options">
+                            <button class="search-option-btn" id="caseSensitiveBtn" title="대소문자 구분">Aa</button>
+                            <button class="search-option-btn" id="wholeWordBtn" title="전체 단어 일치">ab</button>
+                            <button class="search-option-btn" id="regexBtn" title="정규식">*</button>
+                        </div>
+                        <span class="search-results" id="searchResults"></span>
+                    </div>
+                </div>
                 <div class="items-list" id="itemsList">
                     <!-- Items will be populated here -->
                 </div>
@@ -116,12 +130,27 @@
     let selectedFiles = [];
     let selectedItems = new Set();
     let allItems = [];
+    let filteredItems = [];
     let currentPage = 1;
     let itemsPerPage = 25;
     let totalPages = 1;
+    
+    // Search filter variables
+    let searchQuery = '';
+    let searchOptions = {
+        caseSensitive: false,
+        wholeWord: false,
+        regex: false
+    };
+    
+    // Click and drag selection variables
+    let isSelecting = false;
+    let startItem = null;
+    let currentItem = null;
 
     document.addEventListener('DOMContentLoaded', () => {
         initFileUpload();
+        initSearchFilter();
     });
 
     function initFileUpload() {
@@ -386,19 +415,20 @@
             itemsLoading.style.display = 'flex';
             showStatus('전체 아이템 로딩 중 (아이템이 많을 경우 다소 시간이 걸릴 수도 있습니다.)...', true);
             allItems = await fetchItems(trackerSelector.value);
+            filteredItems = [...allItems];
             
             currentPage = 1;
             itemsPerPage = parseInt(document.getElementById('itemsPerPage').value);
-            totalPages = Math.ceil(allItems.length / itemsPerPage);
+            totalPages = Math.ceil(filteredItems.length / itemsPerPage);
             
             displayItems();
             updatePagination();
             
             itemsSelection.style.display = 'block';
-            showStatus(`Successfully loaded ${allItems.length} items from all pages`, true);
+            showStatus(`${allItems.length}개의 아이템을 성공적으로 가져왔습니다`, true);
         } catch (error) {
             console.error('Error loading items:', error);
-            showStatus('Failed to load items - this may be due to rate limiting. Please try again in a moment.', false);
+            showStatus('아이템을 가져오는데 실패하였습니다 - 잠시 후 다시 시도해 주세요', false);
         } finally {
             const itemsLoading = document.getElementById('itemsLoading');
             itemsLoading.style.display = 'none';
@@ -649,7 +679,7 @@
         const itemsList = document.getElementById('itemsList');
         const startIndex = (currentPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
-        const pageItems = allItems.slice(startIndex, endIndex);
+        const pageItems = filteredItems.slice(startIndex, endIndex);
         
         itemsList.innerHTML = '';
         pageItems.forEach(item => {
@@ -657,15 +687,20 @@
             itemDiv.className = 'item-checkbox';
             itemDiv.innerHTML = `
                 <input type="checkbox" id="item-${item.id}" value="${item.id}" onchange="toggleItem(${item.id})" ${selectedItems.has(item.id) ? 'checked' : ''}>
-                <label for="item-${item.id}">
+                <div class="item-label">
                     <span class="item-id">${item.id}</span>
                     <span class="item-name">${item.name}</span>
-                </label>
+                </div>
             `;
             itemsList.appendChild(itemDiv);
         });
         
         updatePaginationInfo();
+        
+        // Initialize click and drag selection after items are displayed
+        setTimeout(() => {
+            initClickAndDragSelection();
+        }, 500);
     }
 
     function updatePagination() {
@@ -673,6 +708,9 @@
         const pageNumbers = document.getElementById('pageNumbers');
         const prevBtn = document.getElementById('prevPage');
         const nextBtn = document.getElementById('nextPage');
+        
+        // Update total pages based on filtered items
+        totalPages = Math.ceil(filteredItems.length / itemsPerPage);
         
         if (totalPages <= 1) {
             pagination.style.display = 'none';
@@ -736,8 +774,8 @@
     function updatePaginationInfo() {
         const paginationInfo = document.getElementById('paginationInfo');
         const startIndex = (currentPage - 1) * itemsPerPage + 1;
-        const endIndex = Math.min(currentPage * itemsPerPage, allItems.length);
-        paginationInfo.textContent = `페이지 ${currentPage} / ${totalPages} (${startIndex}-${endIndex} / ${allItems.length}개의 아이템)`;
+        const endIndex = Math.min(currentPage * itemsPerPage, filteredItems.length);
+        paginationInfo.textContent = `페이지 ${currentPage} / ${totalPages} (${startIndex}-${endIndex} / ${filteredItems.length}개의 아이템)`;
     }
 
     function goToPage(page) {
@@ -756,10 +794,252 @@
 
     function changeItemsPerPage() {
         itemsPerPage = parseInt(document.getElementById('itemsPerPage').value);
-        totalPages = Math.ceil(allItems.length / itemsPerPage);
+        totalPages = Math.ceil(filteredItems.length / itemsPerPage);
         currentPage = 1;
         displayItems();
         updatePagination();
+    }
+
+    // Click and drag selection functionality
+    function initClickAndDragSelection() {
+        const itemsList = document.getElementById('itemsList');
+        if (!itemsList) {
+            return;
+        }
+
+        // Handle mouse down to start selection
+        itemsList.addEventListener('mousedown', (e) => {
+            // Don't interfere with checkbox clicks
+            if (e.target.type === 'checkbox') {
+                return;
+            }
+            
+            const itemCheckbox = e.target.closest('.item-checkbox');
+            if (itemCheckbox) {
+                e.preventDefault();
+                startSelection(itemCheckbox);
+            }
+        });
+
+        // Handle mouse move during selection
+        document.addEventListener('mousemove', (e) => {
+            if (!isSelecting) return;
+            
+            const itemsList = document.getElementById('itemsList');
+            const itemCheckbox = e.target.closest('.item-checkbox');
+            if (itemCheckbox) {
+                updateSelection(itemCheckbox);
+            }
+        });
+
+        // Handle mouse up to end selection
+        document.addEventListener('mouseup', (e) => {
+            if (isSelecting) {
+                endSelection();
+            }
+        });
+    }
+
+    function startSelection(itemElement) {
+        isSelecting = true;
+        startItem = itemElement;
+        currentItem = itemElement;
+        
+        // Toggle the starting item
+        const checkbox = itemElement.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            const itemId = parseInt(checkbox.value);
+            if (checkbox.checked) {
+                selectedItems.add(itemId);
+            } else {
+                selectedItems.delete(itemId);
+            }
+        }
+        
+        // Add visual feedback
+        itemElement.classList.add('selecting');
+    }
+
+    function updateSelection(itemElement) {
+        if (!isSelecting || !startItem) return;
+        
+        // Remove previous selection highlight
+        if (currentItem && currentItem !== itemElement) {
+            currentItem.classList.remove('selecting');
+        }
+        
+        currentItem = itemElement;
+        itemElement.classList.add('selecting');
+        
+        // Select all items between start and current
+        selectRange(startItem, itemElement);
+    }
+
+    function endSelection() {
+        isSelecting = false;
+        
+        // Remove visual feedback
+        const itemsList = document.getElementById('itemsList');
+        const selectingItems = itemsList.querySelectorAll('.selecting');
+        selectingItems.forEach(item => {
+            item.classList.remove('selecting');
+        });
+        
+        startItem = null;
+        currentItem = null;
+        
+        // Update UI
+        updateSelectedCount();
+        updateUploadButton();
+    }
+
+    function selectRange(startElement, endElement) {
+        const itemsList = document.getElementById('itemsList');
+        const allItems = Array.from(itemsList.querySelectorAll('.item-checkbox'));
+        
+        const startIndex = allItems.indexOf(startElement);
+        const endIndex = allItems.indexOf(endElement);
+        
+        if (startIndex === -1 || endIndex === -1) return;
+        
+        const minIndex = Math.min(startIndex, endIndex);
+        const maxIndex = Math.max(startIndex, endIndex);
+        
+        // Select all items in the range
+        for (let i = minIndex; i <= maxIndex; i++) {
+            const itemElement = allItems[i];
+            const checkbox = itemElement.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = true;
+                const itemId = parseInt(checkbox.value);
+                selectedItems.add(itemId);
+            }
+        }
+    }
+
+    // Search Filter Functions
+    function initSearchFilter() {
+        const searchInput = document.getElementById('searchInput');
+        const caseSensitiveBtn = document.getElementById('caseSensitiveBtn');
+        const wholeWordBtn = document.getElementById('wholeWordBtn');
+        const regexBtn = document.getElementById('regexBtn');
+
+        if (searchInput) {
+            searchInput.addEventListener('input', handleSearch);
+            searchInput.addEventListener('keydown', handleSearchKeydown);
+        }
+
+        if (caseSensitiveBtn) {
+            caseSensitiveBtn.addEventListener('click', () => toggleSearchOption('caseSensitive'));
+        }
+
+        if (wholeWordBtn) {
+            wholeWordBtn.addEventListener('click', () => toggleSearchOption('wholeWord'));
+        }
+
+        if (regexBtn) {
+            regexBtn.addEventListener('click', () => toggleSearchOption('regex'));
+        }
+    }
+
+    function handleSearch(event) {
+        searchQuery = event.target.value;
+        filterItems();
+        displayItems();
+        updateSearchResults();
+    }
+
+    function handleSearchKeydown(event) {
+        if (event.key === 'Escape') {
+            clearSearch();
+        }
+    }
+
+    function toggleSearchOption(option) {
+        searchOptions[option] = !searchOptions[option];
+        updateSearchOptionButtons();
+        filterItems();
+        displayItems();
+        updateSearchResults();
+    }
+
+    function updateSearchOptionButtons() {
+        const caseSensitiveBtn = document.getElementById('caseSensitiveBtn');
+        const wholeWordBtn = document.getElementById('wholeWordBtn');
+        const regexBtn = document.getElementById('regexBtn');
+
+        if (caseSensitiveBtn) {
+            caseSensitiveBtn.classList.toggle('active', searchOptions.caseSensitive);
+        }
+        if (wholeWordBtn) {
+            wholeWordBtn.classList.toggle('active', searchOptions.wholeWord);
+        }
+        if (regexBtn) {
+            regexBtn.classList.toggle('active', searchOptions.regex);
+        }
+    }
+
+    function filterItems() {
+        if (!searchQuery.trim()) {
+            filteredItems = [...allItems];
+            return;
+        }
+
+        const query = searchOptions.caseSensitive ? searchQuery : searchQuery.toLowerCase();
+        
+        filteredItems = allItems.filter(item => {
+            const searchText = searchOptions.caseSensitive ? 
+                `${item.id} ${item.name}` : 
+                `${item.id} ${item.name}`.toLowerCase();
+
+            if (searchOptions.regex) {
+                try {
+                    const flags = searchOptions.caseSensitive ? 'g' : 'gi';
+                    const regex = new RegExp(query, flags);
+                    return regex.test(searchText);
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            if (searchOptions.wholeWord) {
+                const words = searchText.split(/\s+/);
+                return words.some(word => 
+                    searchOptions.caseSensitive ? 
+                        word === query : 
+                        word.toLowerCase() === query.toLowerCase()
+                );
+            }
+
+            return searchOptions.caseSensitive ? 
+                searchText.includes(query) : 
+                searchText.includes(query.toLowerCase());
+        });
+    }
+
+    function updateSearchResults() {
+        const searchResults = document.getElementById('searchResults');
+        if (searchResults) {
+            if (searchQuery.trim()) {
+                const totalItems = allItems.length;
+                const filteredCount = filteredItems.length;
+                searchResults.textContent = `${filteredCount} of ${totalItems}`;
+            } else {
+                searchResults.textContent = '';
+            }
+        }
+    }
+
+    function clearSearch() {
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.value = '';
+            searchQuery = '';
+            filterItems();
+            displayItems();
+            updateSearchResults();
+        }
     }
 </script>
 
